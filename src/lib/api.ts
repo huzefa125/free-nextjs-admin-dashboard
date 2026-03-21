@@ -1,8 +1,10 @@
 // Detect the backend URL based on environment or fallback
 const getBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  // Fallback for local development
-  return "http://localhost:5000/api";
+  const url = process.env.NEXT_PUBLIC_API_URL || "";
+  if (typeof window !== "undefined") {
+    console.log(`[API Config]: Using base URL ${url}`);
+  }
+  return url;
 };
 
 export const API_BASE_URL = getBaseUrl();
