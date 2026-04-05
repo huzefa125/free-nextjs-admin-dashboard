@@ -18,9 +18,10 @@ import Label from "@/components/form/Label";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,22 +32,35 @@ export default function CustomersPage() {
     email: "",
   });
 
-  const fetchCustomers = () => {
-    setLoading(true);
-    api.get("/customers")
-      .then(data => {
-        setCustomers(data.data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch customers:", err);
-        setLoading(false);
-      });
-  };
+  // Queries
+  const { data: qData, isLoading: loading } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => api.get("/customers"),
+  });
+  const customers = qData?.data || [];
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
+  // Mutations
+  const customerMutation = useMutation({
+    mutationFn: (data: any) => editingId ? api.put(`/customers/${editingId}`, data) : api.post("/customers", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setIsModalOpen(false);
+      toast.success(editingId ? "Customer updated!" : "Customer added!");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Operation failed");
+    },
+    onSettled: () => setIsSubmitting(false)
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/customers/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast.success("Customer deleted!");
+    },
+    onError: () => toast.error("Deletion failed")
+  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -72,46 +86,22 @@ export default function CustomersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const loadingToast = toast.loading(editingId ? "Updating customer..." : "Adding customer...");
-    try {
-      if (editingId) {
-        await api.put(`/customers/${editingId}`, formData);
-        toast.success("Customer updated successfully!", { id: loadingToast });
-      } else {
-        await api.post("/customers", formData);
-        toast.success("Customer added successfully!", { id: loadingToast });
-      }
-      setIsModalOpen(false);
-      fetchCustomers();
-    } catch (err: any) {
-      toast.error(err.message || "Operation failed", { id: loadingToast });
-    } finally {
-      setIsSubmitting(false);
-    }
+    customerMutation.mutate(formData);
   };
 
   const handleDelete = async (id: string) => {
     const result = await Swal.fire({
       title: "Are you sure?",
-      text: "You won't be able to revert this customer record!",
+      text: "You won't be able to revert this!",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete it!",
       background: document.documentElement.classList.contains("dark") ? "#1a222c" : "#fff",
       color: document.documentElement.classList.contains("dark") ? "#fff" : "#000"
     });
 
     if (result.isConfirmed) {
-      const loadingToast = toast.loading("Deleting customer...");
-      try {
-        await api.delete(`/customers/${id}`);
-        toast.success("Customer deleted!", { id: loadingToast });
-        fetchCustomers();
-      } catch (err: any) {
-        toast.error(err.message || "Deletion failed", { id: loadingToast });
-      }
+      deleteMutation.mutate(id);
     }
   };
 
@@ -144,9 +134,14 @@ export default function CustomersPage() {
                 {loading ? (
                   <TableRow><TableCell colSpan={4} className="px-5 py-8 text-center text-gray-400">Loading customers...</TableCell></TableRow>
                 ) : (
-                  customers.map((customer) => (
+                  customers.map((customer: any) => (
                     <TableRow key={customer._id}>
-                      <TableCell className="px-5 py-4 text-start font-medium text-gray-800 dark:text-white/90">{customer.name}</TableCell>
+                      <TableCell 
+                      className="px-5 py-4 text-start font-medium text-gray-800 dark:text-white/90 cursor-pointer hover:text-brand-500 hover:underline transition-all"
+                      onClick={() => openEditModal(customer)}
+                    >
+                      {customer.name}
+                    </TableCell>
                       <TableCell className="px-5 py-4 text-start text-gray-500 font-bold">{customer.mobile}</TableCell>
                       <TableCell className="px-5 py-4 text-start text-gray-500">{customer.email || "N/A"}</TableCell>
                       <TableCell className="px-5 py-4 text-start">

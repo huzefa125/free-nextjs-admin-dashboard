@@ -4,21 +4,13 @@ import Badge from "../ui/badge/Badge";
 import { ArrowDownIcon, ArrowUpIcon, BoxIconLine, GroupIcon, DollarLineIcon, ShootingStarIcon } from "@/icons";
 import { api } from "@/lib/api";
 
-export const EcommerceMetrics = () => {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+import { useQuery } from "@tanstack/react-query";
 
-  useEffect(() => {
-    api.get("/stats")
-      .then(data => {
-        setStats(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch stats:", err);
-        setLoading(false);
-      });
-  }, []);
+export const EcommerceMetrics = () => {
+  const { data: stats, isLoading: loading } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => api.get("/stats"),
+  });
 
   if (loading) return <div className="p-4 text-center">Loading stats...</div>;
 

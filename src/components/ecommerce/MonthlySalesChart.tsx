@@ -8,25 +8,15 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
 });
 
-export default function MonthlySalesChart() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+import { useQuery } from "@tanstack/react-query";
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await api.get("/stats");
-        if (res.chartData) {
-          setData(res.chartData);
-        }
-      } catch (err) {
-        console.error("Failed to fetch chart data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, []);
+export default function MonthlySalesChart() {
+  const { data: res, isLoading: loading } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => api.get("/stats"),
+  });
+
+  const data: any[] = res?.chartData || [];
 
   const options: ApexOptions = {
     colors: ["#465fff"],

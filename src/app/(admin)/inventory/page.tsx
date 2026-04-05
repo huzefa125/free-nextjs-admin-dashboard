@@ -19,9 +19,10 @@ import Select from "@/components/form/Select";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export default function InventoryPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,22 +53,55 @@ export default function InventoryPage() {
     saleDate: new Date().toISOString().split('T')[0]
   });
 
-  const fetchItems = () => {
-    setLoading(true);
-    api.get("/garage-inventory")
-      .then(data => {
-        setItems(data.data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch inventory:", err);
-        setLoading(false);
-      });
-  };
+  // Queries
+  const { data: qData, isLoading: loading } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: () => api.get("/garage-inventory"),
+  });
+  const items = qData?.data || [];
 
-  useEffect(() => {
-    fetchItems();
-  }, []);
+  // Mutations
+  const inventoryMutation = useMutation({
+    mutationFn: (data: any) => editingId ? api.put(`/garage-inventory/${editingId}`, data) : api.post("/garage-inventory", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      setIsModalOpen(false);
+      toast.success(editingId ? "Inventory updated!" : "Car added to inventory!");
+    },
+    onError: (err: any) => toast.error(err.message || "Operation failed"),
+    onSettled: () => setIsSubmitting(false)
+  });
+
+  const expenseMutation = useMutation({
+    mutationFn: (data: any) => api.post(`/garage-inventory/${selectedItem._id}/expense`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      setIsExpenseModalOpen(false);
+      toast.success("Expense recorded!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to add expense"),
+    onSettled: () => setIsSubmitting(false)
+  });
+
+  const saleMutation = useMutation({
+    mutationFn: (data: any) => api.post(`/garage-inventory/${selectedItem._id}/sale`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      setIsSaleModalOpen(false);
+      toast.success("Sale recorded Successfully!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to record sale"),
+    onSettled: () => setIsSubmitting(false)
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/garage-inventory/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      toast.success("Car removed!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to remove")
+  });
 
   const openAddModal = () => {
     setEditingId(null);
@@ -118,56 +152,21 @@ export default function InventoryPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const loadingToast = toast.loading(editingId ? "Updating car record..." : "Adding car to inventory...");
-    try {
-      if (editingId) {
-        await api.put(`/garage-inventory/${editingId}`, formData);
-        toast.success("Inventory updated!", { id: loadingToast });
-      } else {
-        await api.post("/garage-inventory", formData);
-        toast.success("Car added to inventory!", { id: loadingToast });
-      }
-      setIsModalOpen(false);
-      fetchItems();
-    } catch (err: any) {
-      toast.error(err.message || "Operation failed", { id: loadingToast });
-    } finally {
-      setIsSubmitting(false);
-    }
+    inventoryMutation.mutate(formData);
   };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem?._id) return;
     setIsSubmitting(true);
-    const loadingToast = toast.loading("Recording expense...");
-    try {
-      await api.post(`/garage-inventory/${selectedItem._id}/expense`, expenseData);
-      toast.success("Expense recorded!", { id: loadingToast });
-      setIsExpenseModalOpen(false);
-      fetchItems();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to add expense", { id: loadingToast });
-    } finally {
-      setIsSubmitting(false);
-    }
+    expenseMutation.mutate(expenseData);
   };
 
   const handleRecordSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem?._id) return;
     setIsSubmitting(true);
-    const loadingToast = toast.loading("Recording sale and profit...");
-    try {
-      await api.post(`/garage-inventory/${selectedItem._id}/sale`, saleData);
-      toast.success("Sale recorded Successfully!", { id: loadingToast });
-      setIsSaleModalOpen(false);
-      fetchItems();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to record sale", { id: loadingToast });
-    } finally {
-      setIsSubmitting(false);
-    }
+    saleMutation.mutate(saleData);
   };
 
   const handleDelete = async (id: string) => {
@@ -182,14 +181,7 @@ export default function InventoryPage() {
     });
 
     if (result.isConfirmed) {
-      const loadingToast = toast.loading("Removing car...");
-      try {
-        await api.delete(`/garage-inventory/${id}`);
-        toast.success("Car removed!", { id: loadingToast });
-        fetchItems();
-      } catch (err: any) {
-        toast.error(err.message || "Failed to remove", { id: loadingToast });
-      }
+      deleteMutation.mutate(id);
     }
   };
 
@@ -225,9 +217,14 @@ export default function InventoryPage() {
                 {loading ? (
                   <TableRow><TableCell colSpan={7} className="px-5 py-8 text-center text-gray-400">Loading...</TableCell></TableRow>
                 ) : (
-                  items.map((item) => (
+                  items.map((item: any) => (
                     <TableRow key={item._id}>
-                      <TableCell className="px-5 py-4 text-start font-medium text-gray-800 dark:text-white/90">{item.make} {item.model}</TableCell>
+                      <TableCell 
+                        className="px-5 py-4 text-start font-medium text-gray-800 dark:text-white/90 cursor-pointer hover:text-brand-500 hover:underline transition-all"
+                        onClick={() => openEditModal(item)}
+                      >
+                        {item.make} {item.model}
+                      </TableCell>
                       <TableCell className="px-5 py-4 text-start font-bold uppercase">{item.registrationNumber || "N/A"}</TableCell>
                       <TableCell className="px-5 py-4 text-start">₹{item.purchasePrice?.toLocaleString()}</TableCell>
                       <TableCell className="px-5 py-4 text-start text-brand-500 font-bold">₹{(item.totalInvestment || item.purchasePrice)?.toLocaleString()}</TableCell>

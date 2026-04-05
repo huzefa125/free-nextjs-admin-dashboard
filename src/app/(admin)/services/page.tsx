@@ -19,13 +19,12 @@ import SearchableSelect from "@/components/form/SearchableSelect";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export default function ServicesPage() {
-  const [services, setServices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<any[]>([]);
 
   // Selection states
   const [selectedCustId, setSelectedCustId] = useState("");
@@ -38,27 +37,61 @@ export default function ServicesPage() {
   const [quickCustFormData, setQuickCustFormData] = useState({ name: "", mobile: "" });
   const [quickVehFormData, setQuickVehFormData] = useState({ model: "", registrationNumber: "" });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [jobsData, custData, vehData] = await Promise.all([
-        api.get("/service-jobs"),
-        api.get("/customers"),
-        api.get("/vehicles")
-      ]);
-      setServices(jobsData.data || []);
-      setCustomers(custData.data || []);
-      setVehicles(vehData.data || []);
-    } catch (err) {
-      console.error("Failed to fetch data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Queries
+  const servicesQuery = useQuery({ queryKey: ["services"], queryFn: () => api.get("/service-jobs") });
+  const customersQuery = useQuery({ queryKey: ["customers"], queryFn: () => api.get("/customers") });
+  const vehiclesQuery = useQuery({ queryKey: ["vehicles"], queryFn: () => api.get("/vehicles") });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const services = servicesQuery.data?.data || [];
+  const customers = customersQuery.data?.data || [];
+  const vehicles = vehiclesQuery.data?.data || [];
+  const loading = servicesQuery.isLoading || customersQuery.isLoading || vehiclesQuery.isLoading;
+
+  // Mutations
+  const createJobMutation = useMutation({
+    mutationFn: (data: any) => api.post("/service-jobs", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      setIsModalOpen(false);
+      resetMainForm();
+      toast.success("Service job created!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to create job"),
+    onSettled: () => setIsSubmitting(false)
+  });
+
+  const quickCustomerMutation = useMutation({
+    mutationFn: (data: any) => api.post("/customers", data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      setSelectedCustId(res.data._id);
+      setIsQuickCustOpen(false);
+      setQuickCustFormData({ name: "", mobile: "" });
+      toast.success("Customer added!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed")
+  });
+
+  const quickVehicleMutation = useMutation({
+    mutationFn: (data: any) => api.post("/vehicles", data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+      setSelectedVehId(res.data._id);
+      setIsQuickVehOpen(false);
+      setQuickVehFormData({ model: "", registrationNumber: "" });
+      toast.success("Vehicle added!");
+    },
+    onError: (err: any) => toast.error(err.message || "Failed")
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/service-jobs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      toast.success("Record deleted");
+    },
+    onError: () => toast.error("Deletion failed")
+  });
 
   const addServiceItem = () => {
     setServiceItems([...serviceItems, { description: "", price: 0 }]);
@@ -77,22 +110,11 @@ export default function ServicesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const loadingToast = toast.loading("Saving job & generating invoice...");
-    try {
-      await api.post("/service-jobs", {
-        customer: selectedCustId,
-        vehicle: selectedVehId,
-        services: serviceItems
-      });
-      toast.success("Service job created!", { id: loadingToast });
-      setIsModalOpen(false);
-      resetMainForm();
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create job", { id: loadingToast });
-    } finally {
-      setIsSubmitting(false);
-    }
+    createJobMutation.mutate({
+      customer: selectedCustId,
+      vehicle: selectedVehId,
+      services: serviceItems
+    });
   };
 
   const resetMainForm = () => {
@@ -103,41 +125,19 @@ export default function ServicesPage() {
 
   const handleQuickCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
-    const loadingToast = toast.loading("Creating customer...");
-    try {
-      const res = await api.post("/customers", quickCustFormData);
-      setCustomers([...customers, res.data]);
-      setSelectedCustId(res.data._id);
-      setIsQuickCustOpen(false);
-      setQuickCustFormData({ name: "", mobile: "" });
-      toast.success("Customer added!", { id: loadingToast });
-    } catch (err: any) {
-      toast.error(err.message || "Failed", { id: loadingToast });
-    }
+    quickCustomerMutation.mutate(quickCustFormData);
   };
 
   const handleQuickVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustId) return toast.error("Select customer first!");
-    const loadingToast = toast.loading("Saving vehicle...");
-    try {
-      const res = await api.post("/vehicles", { ...quickVehFormData, customerId: selectedCustId });
-      setVehicles([...vehicles, res.data]);
-      setSelectedVehId(res.data._id);
-      setIsQuickVehOpen(false);
-      setQuickVehFormData({ model: "", registrationNumber: "" });
-      toast.success("Vehicle added!", { id: loadingToast });
-    } catch (err: any) {
-      toast.error(err.message || "Failed", { id: loadingToast });
-    }
+    quickVehicleMutation.mutate({ ...quickVehFormData, customerId: selectedCustId });
   };
 
   const handleDownloadPdf = async (jobId: string) => {
     const loadingToast = toast.loading("Loading Invoice PDF...");
     try {
-      // First ensure the server generates it
       await api.post(`/service-jobs/${jobId}/invoice`, {});
-      // Open the backend PUBLIC download endpoint (does not require Auth headers for browser preview)
       const url = `${API_BASE_URL.replace("/api", "")}/api/service-jobs/${jobId}/download-invoice`;
       window.open(url, '_blank');
       toast.success("PDF ready!", { id: loadingToast });
@@ -158,14 +158,7 @@ export default function ServicesPage() {
     });
 
     if (result.isConfirmed) {
-      const loadingToast = toast.loading("Deleting record...");
-      try {
-        await api.delete(`/service-jobs/${id}`);
-        toast.success("Record deleted", { id: loadingToast });
-        fetchData();
-      } catch (err: any) {
-        toast.error("Deletion failed", { id: loadingToast });
-      }
+      deleteJobMutation.mutate(id);
     }
   };
 
@@ -198,9 +191,12 @@ export default function ServicesPage() {
               ) : services.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="py-12 text-center text-gray-400">No service jobs found.</TableCell></TableRow>
               ) : (
-                services.map(job => (
+                services.map((job: any) => (
                   <TableRow key={job._id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
-                    <TableCell className="px-5 py-4 font-bold text-gray-900 dark:text-white/90">
+                    <TableCell 
+                      className="px-5 py-4 font-bold text-gray-900 dark:text-white/90 cursor-pointer hover:text-brand-500 hover:underline transition-all"
+                      onClick={() => handleDownloadPdf(job._id)}
+                    >
                       #{job.invoiceNumber || job._id.slice(-6).toUpperCase()}
                     </TableCell>
                     <TableCell className="px-5 py-4 font-medium text-gray-700 dark:text-gray-300">
@@ -241,13 +237,13 @@ export default function ServicesPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-4">
               <div className="flex gap-2 items-end">
-                <SearchableSelect label="Select Customer" options={customers.map(c => ({ label: `${c.name} (${c.mobile})`, value: c._id }))} 
+                <SearchableSelect label="Select Customer" options={customers.map((c: any) => ({ label: `${c.name} (${c.mobile})`, value: c._id }))} 
                   value={selectedCustId} onChange={setSelectedCustId} className="flex-1" />
                 <button type="button" onClick={() => setIsQuickCustOpen(true)} className="h-11 px-3 mb-0.5 border rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-brand-600 font-bold text-xl" title="Quick Add Customer">+</button>
               </div>
 
               <div className="flex gap-2 items-end">
-                <SearchableSelect label="Select Vehicle" options={vehicles.filter(v => v.customerId?._id === selectedCustId || v.customerId === selectedCustId || !selectedCustId).map(v => ({ label: `${v.registrationNumber} - ${v.model}`, value: v._id }))} 
+                <SearchableSelect label="Select Vehicle" options={vehicles.filter((v: any) => v.customerId?._id === selectedCustId || v.customerId === selectedCustId || !selectedCustId).map((v: any) => ({ label: `${v.registrationNumber} - ${v.model}`, value: v._id }))} 
                   value={selectedVehId} onChange={setSelectedVehId} className="flex-1" />
                 <button type="button" onClick={() => setIsQuickVehOpen(true)} className="h-11 px-3 mb-0.5 border rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-brand-600 font-bold text-xl disabled:opacity-30 disabled:cursor-not-allowed" title="Quick Add Vehicle" disabled={!selectedCustId}>+</button>
               </div>

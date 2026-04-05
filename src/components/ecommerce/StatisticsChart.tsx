@@ -6,21 +6,13 @@ import { api } from "@/lib/api";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-export default function StatisticsChart() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+import { useQuery } from "@tanstack/react-query";
 
-  useEffect(() => {
-    api.get("/stats")
-      .then(data => {
-        setStats(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch stats:", err);
-        setLoading(false);
-      });
-  }, []);
+export default function StatisticsChart() {
+  const { data: stats, isLoading: loading } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => api.get("/stats"),
+  });
 
   const options: ApexOptions = {
     colors: ["#465FFF", "#01B574", "#FF9F43"],
