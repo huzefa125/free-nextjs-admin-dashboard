@@ -4,11 +4,7 @@ import './globals.css';
 import "flatpickr/dist/flatpickr.css";
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
-<<<<<<< HEAD
 import { AuthProvider } from '@/context/AuthContext';
-=======
-import QueryProvider from '@/components/QueryProvider';
->>>>>>> fed37646de9ea1a0c0b5a2e0b00e6c03aa6d2fdb
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -57,19 +53,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${outfit.className} dark:bg-gray-900`}>
-<<<<<<< HEAD
         <AuthProvider>
           <ThemeProvider>
             <SidebarProvider>{children}</SidebarProvider>
           </ThemeProvider>
         </AuthProvider>
-=======
-        <ThemeProvider>
-          <SidebarProvider>
-            <QueryProvider>{children}</QueryProvider>
-          </SidebarProvider>
-        </ThemeProvider>
->>>>>>> fed37646de9ea1a0c0b5a2e0b00e6c03aa6d2fdb
       </body>
     </html>
   );

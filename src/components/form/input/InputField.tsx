@@ -3,12 +3,9 @@ import React, { FC } from "react";
 interface InputProps {
   type?: "text" | "number" | "email" | "password" | "date" | "time" | string;
   id?: string;
-<<<<<<< HEAD
   name?: string;
+  label?: string;
   placeholder?: string;
-=======
-  label?: string; // Natively supported label
->>>>>>> fed37646de9ea1a0c0b5a2e0b00e6c03aa6d2fdb
   value?: string | number;
   defaultValue?: string | number;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -21,9 +18,6 @@ interface InputProps {
   success?: boolean;
   error?: boolean;
   hint?: string;
-  required?: boolean;
-  name?: string;
-  placeholder?: string;
 }
 
 const Input: FC<InputProps> = ({
@@ -44,7 +38,6 @@ const Input: FC<InputProps> = ({
   success = false,
   error = false,
   hint,
-  required,
 }) => {
   let inputClasses = `h-11 w-full rounded-lg border appearance-none px-4 py-2.5 text-sm shadow-theme-xs placeholder:text-gray-400 focus:outline-hidden focus:ring-3 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800 ${className}`;
 
@@ -59,43 +52,13 @@ const Input: FC<InputProps> = ({
   }
 
   return (
-<<<<<<< HEAD
-    <div className="relative">
-      <input
-        type={type}
-        id={id}
-        name={name}
-        placeholder={placeholder}
-        value={value}
-        defaultValue={defaultValue}
-        onChange={onChange}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        required={required}
-        className={inputClasses}
-      />
-
-      {/* Optional Hint Text */}
-      {hint && (
-        <p
-          className={`mt-1.5 text-xs ${
-            error
-              ? "text-error-500"
-              : success
-              ? "text-success-500"
-              : "text-gray-500"
-          }`}
-=======
-    <div className="w-full space-y-1.5 flex flex-col">
+    <div className="w-full">
       {label && (
         <label
           htmlFor={id || name}
-          className="text-sm font-medium text-gray-700 dark:text-gray-300 text-start"
->>>>>>> fed37646de9ea1a0c0b5a2e0b00e6c03aa6d2fdb
+          className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
         >
-          {label} {required && <span className="text-error-500">*</span>}
+          {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
       <div className="relative">
@@ -117,7 +80,15 @@ const Input: FC<InputProps> = ({
       </div>
 
       {hint && (
-        <p className={`text-xs ${error ? "text-error-500" : success ? "text-success-500" : "text-gray-500"}`}>
+        <p
+          className={`mt-1.5 text-xs ${
+            error
+              ? "text-error-500"
+              : success
+              ? "text-success-500"
+              : "text-gray-500"
+          }`}
+        >
           {hint}
         </p>
       )}
